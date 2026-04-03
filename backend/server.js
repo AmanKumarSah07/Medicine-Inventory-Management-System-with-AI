@@ -21,7 +21,7 @@ import reorderRoutes from './routes/reorders.js';
 import supplierRoutes from './routes/suppliers.js';
 import logRoutes from './routes/logs.js';
 import openfdaRoutes from './routes/openfda.js';
-
+import aiRoutes from './routes/ai.js';
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
 import { notFound } from './middleware/notFound.js';
@@ -133,7 +133,7 @@ app.use('/api/reorders', reorderRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/logs', logRoutes);
 app.use('/api/openfda', openfdaRoutes);
-
+app.use('/api/ai', aiRoutes);
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({

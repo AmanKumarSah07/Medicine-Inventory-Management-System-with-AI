@@ -1,7 +1,7 @@
 // App.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-
+import AIDashboard from "./components/AIDashboard.jsx";
 /*
 Medical Inventory System (single-file)
 - Tailwind UI + framer-motion
@@ -406,23 +406,45 @@ function LoginScreen({ onLogin, authError, users }) {
 /* ---------- Dashboard (role routing) ---------- */
 function Dashboard({ state, currentUser, addUser, removeUser, addMedicine, removeMedicine, doctorRequest, approveReorder, updateOrderStatus, pushLog, setState }) {
   const role = currentUser.role;
+  const [viewAI, setViewAI] = useState(false);
 
   return (
     <div className="grid gap-6">
-      <div className="grid md:grid-cols-4 gap-4">
+      <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border">
+        <h2 className="text-xl font-bold">Workspace: {role === "admin" ? "Admin" : role === "inventory" ? "Inventory Manager" : role === "doctor" ? "Doctor/Nurse" : "Supplier"}</h2>
+        {role !== "supplier" && (
+          <button 
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${viewAI ? 'bg-purple-600 text-white shadow-lg' : 'bg-purple-100 text-purple-700 hover:bg-purple-200'}`}
+            onClick={() => setViewAI(!viewAI)}
+          >
+            {viewAI ? "Close AI Dashboard" : "✨ Enter AI Dashboard"}
+          </button>
+        )}
+      </div>
+
+      {!viewAI && (
+        <div className="grid md:grid-cols-4 gap-4">
         <Stat title="Total Medicines" value={state.medicines.length} />
         <Stat title="Low Stock" value={state.medicines.filter((m) => m.quantity <= m.reorderLevel).length} tone="amber" />
         <Stat title="Open Orders" value={state.orders.filter((o) => o.status !== "Delivered").length} tone="blue" />
         <Stat title="Pending Reorders" value={state.reorders.length} tone="emerald" />
       </div>
+      )}
 
-      {role === "admin" && <AdminPanel state={state} addUser={addUser} removeUser={removeUser} pushLog={pushLog} />}
-      {role === "inventory" && <InventoryPanel state={state} addMedicine={addMedicine} removeMedicine={removeMedicine} approveReorder={approveReorder} updateOrderStatus={updateOrderStatus} pushLog={pushLog} />}
-      {role === "doctor" && <DoctorPanel state={state} doctorRequest={doctorRequest} />}
-      {role === "supplier" && <SupplierPanel state={state} updateOrderStatus={updateOrderStatus} />}
+      {!viewAI && role === "admin" && <AdminPanel state={state} addUser={addUser} removeUser={removeUser} pushLog={pushLog} />}
+      {!viewAI && role === "inventory" && <InventoryPanel state={state} addMedicine={addMedicine} removeMedicine={removeMedicine} approveReorder={approveReorder} updateOrderStatus={updateOrderStatus} pushLog={pushLog} />}
+      {!viewAI && role === "doctor" && <DoctorPanel state={state} doctorRequest={doctorRequest} />}
+      {!viewAI && role === "supplier" && <SupplierPanel state={state} updateOrderStatus={updateOrderStatus} />}
+
+      {/* AI Dashboard Section */}
+      {viewAI && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <AIDashboard state={state} pushLog={pushLog} addMedicine={addMedicine} />
+        </motion.div>
+      )}
 
       {/* Activity log visible only to admin and inventory */}
-      {(role === "admin" || role === "inventory") && <ActivityLog logs={state.logs} />}
+      {!viewAI && (role === "admin" || role === "inventory") && <ActivityLog logs={state.logs} />}
     </div>
   );
 }
@@ -618,6 +640,24 @@ function DoctorPanel({ state, doctorRequest }) {
   const [requester, setRequester] = useState("Dr. Guest");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [aiWarning, setAiWarning] = useState("");
+
+  const checkDrugSafety = async () => {
+    const medName = state.medicines.find(m => m.id === selected)?.name;
+    if (!medName) return;
+    setAiWarning("Checking with AI...");
+    try {
+      const res = await fetch("http://localhost:5000/api/ai/interact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ medicines: [medName] })
+      });
+      const data = await res.json();
+      setAiWarning(data.analysis || "No interaction insights available.");
+    } catch {
+      setAiWarning("AI check failed. Backend off or unconfigured.");
+    }
+  };
 
   const meds = state.medicines;
 
@@ -650,7 +690,12 @@ function DoctorPanel({ state, doctorRequest }) {
           </div>
           <Button onClick={submit} disabled={busy}>{busy ? "Processing..." : "Request"}</Button>
         </div>
-        {message && <div className="text-sm text-slate-700">{message}</div>}
+        <div className="flex justify-between items-center bg-blue-50 p-3 rounded-xl border border-blue-100">
+          <div className="text-sm text-slate-700 font-medium">✨ AI Safety Check for selected medicine</div>
+          <Button variant="soft" onClick={checkDrugSafety}>Analyze FDA Data</Button>
+        </div>
+        {aiWarning && <div className="mt-3 p-3 bg-white border border-slate-200 rounded-xl text-sm italic">{aiWarning}</div>}
+        {message && <div className="mt-3 text-sm text-slate-700">{message}</div>}
       </Card>
 
       <Card title="Recent Requests">
