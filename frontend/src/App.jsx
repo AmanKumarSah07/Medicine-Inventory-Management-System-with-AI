@@ -396,7 +396,7 @@ function LoginScreen({ onLogin, authError, users }) {
       <div className="order-1 md:order-2">
         <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-gradient-to-br from-blue-600 to-emerald-500 text-white rounded-3xl p-8 shadow-lg">
           <div className="text-3xl font-bold mb-2">Welcome</div>
-         
+          <p className="opacity-90">Role-based demo. Aman is admin (password 12345678). Doctors get instant dispensing when stock exists. If stock is low, a reorder suggestion is created and sent to Inventory panel.</p>
         </motion.div>
       </div>
     </div>
@@ -517,12 +517,77 @@ function InventoryPanel({ state, addMedicine, removeMedicine, approveReorder, up
       </Card>
 
       <Card title="Reorder Suggestions (Approve to create Order)">
+        <div className="mb-4 flex gap-2">
+          <Button variant="soft" onClick={() => {
+            // Auto-generate reorder suggestions for low stock medicines
+            const lowStockMedicines = state.medicines.filter(m => m.quantity <= m.reorderLevel);
+            lowStockMedicines.forEach(med => {
+              const suggestion = {
+                id: uid(),
+                medicineId: med.id,
+                medicine: med.name,
+                qty: Math.max(med.reorderLevel * 2, 50),
+                status: "Pending Approval",
+                createdAt: new Date().toLocaleString(),
+                reason: med.quantity === 0 ? "Out of Stock" : "Low Stock",
+                priority: med.quantity === 0 ? "urgent" : "high"
+              };
+              setState(s => ({ ...s, reorders: [suggestion, ...s.reorders] }));
+            });
+            pushLog(`Auto-generated ${lowStockMedicines.length} reorder suggestions for low stock medicines`);
+          }}>
+            Auto-Generate Suggestions
+          </Button>
+          <Button variant="soft" onClick={() => {
+            // Manual reorder creation
+            const medicineId = prompt("Enter medicine ID for manual reorder:");
+            const qty = prompt("Enter suggested quantity:");
+            if (medicineId && qty) {
+              const med = state.medicines.find(m => m.id === parseInt(medicineId));
+              if (med) {
+                const suggestion = {
+                  id: uid(),
+                  medicineId: med.id,
+                  medicine: med.name,
+                  qty: parseInt(qty),
+                  status: "Pending Approval",
+                  createdAt: new Date().toLocaleString(),
+                  reason: "Manual",
+                  priority: "normal"
+                };
+                setState(s => ({ ...s, reorders: [suggestion, ...s.reorders] }));
+                pushLog(`Manual reorder suggestion created for ${med.name}`);
+              }
+            }
+          }}>
+            Create Manual Reorder
+          </Button>
+        </div>
         <Table
           columns={[
             { key: "medicine", header: "Medicine" },
             { key: "qty", header: "Qty" },
+            { key: "reason", header: "Reason" },
+            { key: "priority", header: "Priority", cell: (r) => (
+              <span className={`px-2 py-1 rounded-full text-xs ${
+                r.priority === 'urgent' ? 'bg-red-100 text-red-800' :
+                r.priority === 'high' ? 'bg-orange-100 text-orange-800' :
+                r.priority === 'normal' ? 'bg-blue-100 text-blue-800' :
+                'bg-gray-100 text-gray-800'
+              }`}>
+                {r.priority || 'normal'}
+              </span>
+            )},
             { key: "createdAt", header: "Created" },
-            { key: "actions", header: "Actions", cell: (r) => <Button variant="green" onClick={() => approveReorder(r.id)}>Approve</Button> },
+            { key: "actions", header: "Actions", cell: (r) => (
+              <div className="flex gap-2">
+                <Button variant="green" onClick={() => approveReorder(r.id)}>Approve</Button>
+                <Button variant="danger" onClick={() => {
+                  setState(s => ({ ...s, reorders: s.reorders.filter(x => x.id !== r.id) }));
+                  pushLog(`Reorder suggestion for ${r.medicine} was rejected`);
+                }}>Reject</Button>
+              </div>
+            ) },
           ]}
           data={state.reorders}
           empty="No suggestions"
